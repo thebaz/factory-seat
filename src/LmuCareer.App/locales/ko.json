@@ -5,7 +5,26 @@
     "app": "Factory Seat 1.1",
     "note": "키(왼쪽)는 영어 원문, 값(오른쪽)은 한국어입니다. {이름} 형태는 프로그램이 숫자/이름을 채워 넣는 자리이므로 그대로 두세요. 팀·트랙·차량·스폰서 이름은 고유명사라 번역하지 않습니다."
   },
+  "API consent": {
+    "Experimental LMU API access": "실험적 LMU API 접근",
+    "These internal, undocumented APIs may change with any LMU patch. Requests can fail or partially change game settings.": "이 내부 API는 문서화되지 않았으며 LMU가 업데이트될 때마다 변경될 수 있습니다. 요청이 실패하거나 게임 설정이 일부만 변경될 수 있습니다.",
+    "The original Factory Seat author is not responsible for developing, maintaining or supporting this fork's API integration. It comes without guarantees; use it at your own risk.": "이 포크의 API 연동 기능 개발, 유지 관리 및 지원은 Factory Seat 원작자의 책임이 아닙니다. 이 기능에는 보증이 없으며, 사용에 따른 위험은 사용자가 부담합니다.",
+    "API access can read content ownership and, only when you request assisted launch, change settings and load a weekend. Manual mode and XML results do not require it.": "API 접근을 통해 보유 콘텐츠를 확인할 수 있으며, 보조 실행을 요청한 경우에만 설정을 변경하고 레이스 주말을 불러옵니다. 수동 모드와 XML 결과에는 API 접근이 필요하지 않습니다.",
+    "I have read this notice, understand the risks and explicitly consent to using LMU's internal APIs.": "이 안내를 읽고 위험을 이해했으며, LMU 내부 API 사용에 명시적으로 동의합니다.",
+    "Consent lasts until the app is reloaded or closed. You can revoke it in Settings; this does not undo commands already sent.": "동의는 앱을 새로 불러오거나 종료할 때까지 유효합니다. 설정에서 동의를 철회할 수 있지만 이미 전송된 명령은 취소되지 않습니다.",
+    "Enable API access for this session": "이번 세션의 API 접근 허용",
+    "Stay in manual mode": "수동 모드 유지",
+    "LMU API consent": "LMU API 사용 동의",
+    "Revoke API consent": "API 동의 철회",
+    "API consent revoked. Manual mode remains available.": "API 동의가 철회되었습니다. 수동 모드는 계속 사용할 수 있습니다.",
+    "API consent is required. Manual mode remains available.": "API 사용 동의가 필요합니다. 수동 모드는 계속 사용할 수 있습니다."
+  },
   "Common": {
+    "I understand that unsaved session progress may be lost.": "저장하지 않은 세션 진행 상황이 손실될 수 있음을 이해합니다.",
+    "Replace the offline session reported by LMU?": "LMU가 보고한 오프라인 세션을 교체할까요?",
+    "LMU may report a previous session even on its home screen. Continuing will replace any loaded offline session with this career weekend. Unsaved session progress may be lost. Only continue if you intend to start a new weekend.": "LMU는 홈 화면에서도 이전 세션을 보고할 수 있습니다. 계속하면 불러온 오프라인 세션이 이 커리어의 레이스 주말로 교체됩니다. 저장하지 않은 세션 진행 상황이 손실될 수 있습니다. 새 레이스 주말을 시작하려는 경우에만 계속하세요.",
+    "Replace session and launch": "세션 교체 후 실행",
+    "Launch cancelled. No LMU settings were changed.": "실행이 취소되었습니다. LMU 설정은 변경되지 않았습니다.",
     "Not set": "설정되지 않음",
     "Confirm": "확인",
     "Cancel": "취소",

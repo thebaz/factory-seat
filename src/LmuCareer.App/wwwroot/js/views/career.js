@@ -5,7 +5,7 @@ import { sound } from "../sound.js";
 import { runTour, tourRunning } from "../tour.js";
 import { tierName, kindName, CLASS_NAMES, target, livery, carNumbers, offerFacts, standing, signed } from "./offers.js";
 import { packChecklist } from "./packs.js";
-import { weekendSetup, launchConfiguredWeekend } from "./weekendSetup.js";
+import { weekendSetup, launchConfiguredWeekend, startManualWeekend } from "./weekendSetup.js";
 import { t, tn, lmu, mark, number, dateTime, capitalize, midSentence, countryName, currentLanguage } from "../i18n.js";
 
 let stopListening = null;
@@ -253,8 +253,16 @@ export async function careerView(view, id, tab) {
               data = await call("saveWeekendConfiguration", { id, roundNumber: round.number, configuration });
               show("briefing");
             },
-            onLaunch: async (configuration, progress) => {
-              const result = await launchConfiguredWeekend(call, { id, roundNumber: round.number, configuration }, progress);
+            onManual: async (configuration) => {
+              const result = await startManualWeekend(call, { id, roundNumber: round.number, configuration });
+              data = result.view;
+              toast(result.alreadyStarted
+                ? t("Weekend already started. Continue in LMU; the existing XML result-matching boundary is unchanged.")
+                : t("Race weekend started. Set it up in LMU and go racing."));
+              show("briefing");
+            },
+            onLaunch: async (configuration, progress, { replaceMonitoredOfflineSession = false } = {}) => {
+              const result = await launchConfiguredWeekend(call, { id, roundNumber: round.number, configuration, replaceMonitoredOfflineSession }, progress);
               data = result.view;
               toast(t("Launch requested. Switch to LMU; results will still be read from XML."));
               show("briefing");
@@ -291,7 +299,7 @@ export async function careerView(view, id, tab) {
       h("div", { class: "grid-3" },
         [
           [1, t("Weekend configuration"), t("Choose event settings, practice and qualifying here. Each race keeps its own choices.")],
-          [isArmed ? "✓" : 2, t("Launch weekend in LMU"), t("One action applies and verifies your settings, enables result tracking and loads the weekend.")],
+          [isArmed ? "✓" : 2, t("Manual or assisted"), t("Start manually without game API calls, or choose assisted setup to apply, verify and load in LMU. Both use the same XML results.")],
           [3, t("Race, and leave this app open"), t("When the race ends, the result pops up here. Long race? Save it in LMU and finish it another day.")],
         ].map(([n, title, text]) => h("div", { class: "checklist-step" },
           h("div", { class: "n" }, n), h("div", {}, h("b", {}, title), h("div", { class: "muted" }, text))))));
@@ -473,11 +481,7 @@ export async function careerView(view, id, tab) {
 
     if (!isArmed) {
       put(panel,
-        h("div", { class: "muted" }, t("Choose this race's settings and launch from the configuration panel. Result tracking starts automatically before loading.")),
-        h("details", { class: "manual-weekend" },
-          h("summary", {}, t("Manual launch / saved race")),
-          h("p", { class: "muted" }, t("Only for manual setup or a race saved in LMU: enable XML tracking without sending game commands.")),
-          h("button", { class: "btn ghost small", "data-sound": "confirm", onclick: arm }, t("Enable result tracking only"))),
+        h("div", { class: "muted" }, t("Choose manual or assisted start in the configuration panel. XML monitoring and result matching are the same in both modes.")),
         h("div", { class: "row" },
           h("div", { class: "spacer" }),
           h("button", { class: "btn ghost small", onclick: skip }, t("Skip round"))));
@@ -665,13 +669,6 @@ export async function careerView(view, id, tab) {
   }
 
   // Each change re-opens the tab, which reloads the career.
-  async function arm() {
-    if (await attempt(call("armRound", { id }))) {
-      toast(t("Race weekend started. Set it up in LMU and go racing."));
-      show("briefing");
-    }
-  }
-
   async function disarm() {
     const ok = await confirmDialog(t("Cancel the weekend?"), t("Races run so far won't count. You can start the weekend again any time."),
       { confirm: t("Cancel weekend") });

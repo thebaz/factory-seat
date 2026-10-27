@@ -133,7 +133,7 @@ public sealed class AppHostTests : IDisposable
     {
         var career = WeekendCareer();
         new CareerStore(_home).Save(career);
-        using var reply = await Call("previewLmuWeekend", new { id = career.Id, roundNumber = 2 });
+        using var reply = await Call("previewLmuWeekend", new { id = career.Id, roundNumber = 2, apiConsent = true, apiConsentVersion = "lmu-api-v1" });
         Assert.False(reply.RootElement.GetProperty("ok").GetBoolean());
         Assert.Equal("The next round changed. Reopen its configuration.", reply.RootElement.GetProperty("error").GetString());
     }
@@ -152,9 +152,56 @@ public sealed class AppHostTests : IDisposable
     private Task<JsonDocument> SaveWeekend(Guid id, int roundNumber) => Call("saveWeekendConfiguration", new
     {
         id, roundNumber,
-        configuration = new { raceMinutes = 45, fuelUsage = 2, tyreWear = 1, timeScale = 10, startTime = "10:00",
-            sessions = new { practice = new { mode = "skip", minutes = 60 }, qualifying = new { mode = "private", minutes = 15 } } },
+        configuration = Configuration(),
     });
+
+    private static object Configuration() => new
+    {
+        raceMinutes = 45, fuelUsage = 2, tyreWear = 1, timeScale = 10, startTime = "10:00",
+        sessions = new { practice = new { mode = "skip", minutes = 60 }, qualifying = new { mode = "private", minutes = 15 } },
+    };
+
+    [Fact]
+    public async Task Manual_start_saves_and_arms_the_round_without_the_game()
+    {
+        var career = WeekendCareer();
+        new CareerStore(_home).Save(career);
+        using var reply = await Call("startManualWeekend", new { id = career.Id, roundNumber = 1, configuration = Configuration() });
+        Assert.True(reply.RootElement.GetProperty("ok").GetBoolean());
+        Assert.False(reply.RootElement.GetProperty("result").GetProperty("alreadyStarted").GetBoolean());
+        var saved = new CareerStore(_home).Load(career.Id).Career;
+        Assert.Equal(RoundState.Armed, saved.CurrentSeason.Rounds[0].State);
+        Assert.NotNull(saved.CurrentSeason.Rounds[0].ArmedAt);
+        Assert.Equal(45, saved.CurrentSeason.Rounds[0].RaceMinutes);
+        Assert.Equal(RoundState.Upcoming, saved.CurrentSeason.Rounds[1].State);
+    }
+
+    [Fact]
+    public async Task Manual_continuation_preserves_an_already_armed_weekend_and_its_XML_boundary()
+    {
+        var career = WeekendCareer();
+        var originalStart = DateTimeOffset.Now.AddHours(-1);
+        RoundFlow.Arm(career.CurrentSeason, originalStart);
+        new CareerStore(_home).Save(career);
+        using var reply = await Call("startManualWeekend", new { id = career.Id, roundNumber = 1, configuration = Configuration() });
+        Assert.True(reply.RootElement.GetProperty("result").GetProperty("alreadyStarted").GetBoolean());
+        var saved = new CareerStore(_home).Load(career.Id).Career;
+        Assert.Equal(originalStart, saved.CurrentSeason.Rounds[0].ArmedAt);
+        Assert.Equal(30, saved.CurrentSeason.Rounds[0].RaceMinutes);
+        Assert.Null(saved.CurrentSeason.Rounds[0].WeekendSessions);
+    }
+
+    [Fact]
+    public async Task Invalid_or_stale_manual_configuration_does_not_arm_any_round()
+    {
+        var career = WeekendCareer();
+        new CareerStore(_home).Save(career);
+        using var invalid = await Call("startManualWeekend", new { id = career.Id, roundNumber = 1, configuration = new { raceMinutes = 31 } });
+        using var stale = await Call("startManualWeekend", new { id = career.Id, roundNumber = 2, configuration = Configuration() });
+        Assert.False(invalid.RootElement.GetProperty("ok").GetBoolean());
+        Assert.False(stale.RootElement.GetProperty("ok").GetBoolean());
+        Assert.Null(new CareerStore(_home).Load(career.Id).Career.CurrentSeason.ArmedRound);
+    }
 
     [Fact]
     public async Task Install_folder_is_validated_and_the_same_XML_results_folder_is_used()
@@ -192,7 +239,7 @@ public sealed class AppHostTests : IDisposable
     [InlineData("startLmuWeekend")]
     public async Task Weekend_commands_require_a_valid_career_and_prepared_preview(string method)
     {
-        using var reply = await Call(method, new { id = Guid.NewGuid().ToString(), confirmed = true, token = "invented" });
+        using var reply = await Call(method, new { id = Guid.NewGuid().ToString(), confirmed = true, token = "invented", apiConsent = true, apiConsentVersion = "lmu-api-v1" });
         Assert.False(reply.RootElement.GetProperty("ok").GetBoolean());
     }
 
@@ -212,10 +259,30 @@ public sealed class AppHostTests : IDisposable
             },
         };
         new CareerStore(_home).Save(career);
-        using var reply = await Call(method, new { id = career.Id, token = "invented", confirmed = true });
+        using var reply = await Call(method, new { id = career.Id, token = "invented", confirmed = true, apiConsent = true, apiConsentVersion = "lmu-api-v1" });
         Assert.False(reply.RootElement.GetProperty("ok").GetBoolean());
         Assert.Contains("preview", reply.RootElement.GetProperty("error").GetString(), StringComparison.OrdinalIgnoreCase);
         Assert.Null(new CareerStore(_home).Load(career.Id).Career.CurrentSeason.ArmedRound);
+    }
+
+    [Theory]
+    [InlineData("detectOwnedContent")]
+    [InlineData("previewLmuWeekend")]
+    [InlineData("applyLmuWeekend")]
+    [InlineData("startLmuWeekend")]
+    public async Task Every_game_API_entry_point_requires_explicit_versioned_consent(string method)
+    {
+        foreach (var args in new object[]
+        {
+            new { }, new { apiConsent = false, apiConsentVersion = "lmu-api-v1" },
+            new { apiConsent = true }, new { apiConsent = true, apiConsentVersion = "old" },
+            new { apiConsent = true, apiConsentVersion = 1 },
+        })
+        {
+            using var reply = await Call(method, args);
+            Assert.False(reply.RootElement.GetProperty("ok").GetBoolean());
+            Assert.Equal("API consent is required. Manual mode remains available.", reply.RootElement.GetProperty("error").GetString());
+        }
     }
 
     private async Task<JsonDocument> Call(string method, object? args = null) =>

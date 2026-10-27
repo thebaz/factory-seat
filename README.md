@@ -18,7 +18,7 @@ Start as an LMGT3 rookie and race your way up through LMP3 and LMP2 to a factory
 
 - **Multi-season careers.** LMGT3 → LMP3 → LMP2 → Hypercar. You only move up when a team offers you a seat.
 - **Season builder.** A default world or European calendar for your class, with every race's length adjustable and events you can add, reorder or make up yourself.
-- **Race-weekend configuration.** Track and car come from your career; choose race length, Time Scale, Fuel Usage, Tyre Wear, start time, practice and qualifying for each round. One action applies, verifies and loads the weekend in the running game, with a pit plan based on the saved settings.
+- **Race-weekend configuration.** Track and car come from your career; choose race length, Time Scale, Fuel Usage, Tyre Wear, start time, practice and qualifying for each round. Manual start is the default and does not call the game API. Optional assisted setup applies, verifies and loads the weekend in the running game, with a pit plan based on the saved settings.
 - **Owned-content detection.** Read car and track access from the running game, including subscription access, or select DLC packs manually.
 - **Italian localization**, including the weekend configuration and content-detection screens.
 - **Automatic results.** Leave the app open while you race. It watches LMU's results folder and pops up when the race ends. Only races that match the briefing count, so test drives and online races never do.
@@ -47,15 +47,19 @@ Every release lists the installer's SHA-256 checksum and a link to its VirusTota
 ## How a race weekend works
 
 1. Open your career's **Next race** screen and choose this round's event settings, practice and qualifying. **Save configuration** saves them without contacting the game.
-2. Start LMU and open its offline **Race Weekend** menu.
-3. Press **Launch weekend in LMU**. This saves your choices, prepares and applies the settings, reads them back, enables XML result tracking and loads the weekend. A failed verification prevents loading; no game commands are automatically retried.
+2. With **Manual** selected (the default), press **Start manual weekend**. This saves the choices and starts the weekend in Factory Seat, with no game API dependency. Configure and run LMU's offline Race Weekend yourself.
+3. Alternatively, select **Assisted (LMU API)** and open LMU at its offline **Race Weekend** menu. Press **Launch weekend in LMU** to apply the configuration, verify it and load the weekend. Before any API access, read the notice, tick the unchecked consent box and explicitly enable access for this session. A failed verification prevents loading; no game commands are automatically retried.
+
+The consent notice is available in all seven shipped languages, including English. It explains the risks of internal, undocumented APIs and that the original Factory Seat author is not responsible for developing, maintaining or supporting this fork's API integration. Consent is also required for content detection, lasts only until reload/close, and can be revoked in **Settings → Revoke API consent**. Revocation blocks later API requests but cannot undo commands already sent. Cancelling the dialog leaves manual mode and XML results available.
+
+LMU can still report a previous/loaded offline session even on its home screen. When its API additionally confirms monitor mode (not replay or loading), assisted launch shows an inline warning and unchecked checkbox in the weekend panel. Tick the box and explicitly press **Replace session and launch** only to replace the loaded offline session: unsaved progress may be lost. Cancel to preserve it. This confirmation is separate from API consent; no game settings or load command are sent before it. Multiplayer and driving outside the monitor remain blocked.
 4. When the race ends, the app pops up with your result. Count it, and the standings update.
 
 At the end of the season you get a review, a reputation change, and offers for next season.
 
-For manual setups or a race already saved in LMU, **Manual launch / saved race → Enable result tracking only** enables tracking without sending game commands. Do not reload an active or saved weekend: resume it in LMU instead.
+XML monitoring and result matching are unchanged and shared by both modes. A failed API check or application leaves the manual action available. After an uncertain load, **Continue manually** preserves any already-recorded weekend start time and configuration; it never repeats a game load command. Check LMU first. Do not cancel or reload an active or saved weekend: resume it in LMU instead.
 
-![Per-race weekend configuration, with event settings and independent practice and qualifying controls](docs/screenshots/weekend-configuration-it.png)
+![Event settings and independent practice/qualifying controls with manual and optional assisted starts](docs/screenshots/weekend-modes-it.png)
 
 ## Good to know
 
@@ -87,7 +91,7 @@ Not yet. LMU removed the AI takeover button in 2024, so you drive the whole race
 Yes. Leave the car number and team blank when you start a career, and the app learns them from your first race. Race Control custom-team cars are recognised whatever number they run.
 
 **A race didn't count. Why?**
-A race only counts if it matches the saved configuration: the right track and layout, your career car, an offline Race Weekend, and a result written after tracking was enabled. Automatic launch enables tracking before loading; manual setup uses **Enable result tracking only**. If the track, layout and car are right but settings are off (race length, Fuel Usage, Tyre Wear), the app asks whether to count it anyway. If nothing popped up, open the career and press **Check now**, which tells you why the race didn't match.
+A race only counts if it matches the saved configuration: the right track and layout, your career car, an offline Race Weekend, and a result written after the weekend was started here. Assisted launch starts the weekend before loading; manual setup uses **Start manual weekend**. If the track, layout and car are right but settings are off (race length, Fuel Usage, Tyre Wear), the app asks whether to count it anyway. If nothing popped up, open the career and press **Check now**, which tells you why the race didn't match.
 
 ## Feedback and ideas
 

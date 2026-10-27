@@ -34,6 +34,7 @@ PLURAL_FORMS = {"zero", "one", "two", "few", "many", "other"}
 # Where each source file's strings go in the template, in the order a player meets them.
 GROUPS = [
     ("app.js", "Common"),
+    ("apiConsent.js", "API consent"),
     ("i18n.js", "Common"),
     ("dom.js", "Common"),
     ("tour.js", "Common"),

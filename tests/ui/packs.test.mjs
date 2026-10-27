@@ -27,6 +27,9 @@ globalThis.window = { chrome: { webview: {
   postMessage: (request) => requests.push(request),
 } } };
 const { packChecklist, PACK_GROUPS } = await import("../../src/LmuCareer.App/wwwroot/js/views/packs.js");
+const { configureApiConsent } = await import("../../src/LmuCareer.App/wwwroot/js/api.js");
+configureApiConsent(async () => true);
+const flushConsent = () => new Promise(resolve => setImmediate(resolve));
 const cat = { packs: PACK_GROUPS.flatMap((g) => g.ids).map((id) => ({ id, name: id })), cars: [], tracks: [] };
 const reply = (body) => receive({ data: { id: requests.at(-1).id, ...body } });
 const button = (panel) => panel.children.find((c) => c.tag === "button");
@@ -39,6 +42,7 @@ test("detects only on click, disables the button and preserves unresolved manual
   assert.equal(requests.length, 0);
   const pending = button(panel).listeners.click();
   assert.equal(button(panel).disabled, true);
+  await flushConsent();
   assert.equal(requests[0].method, "detectOwnedContent");
   const result = { checkedPacks: ["2024-1", "2024-2"], ownedPacks: ["2024-2"], unresolvedPacks: ["us-3"] };
   reply({ ok: true, result });
@@ -50,6 +54,7 @@ test("unavailable API leaves the selection alone and allows Retry", async () => 
   let changes = 0;
   const [panel] = packChecklist(cat, ["2024-1"], () => { changes++; });
   const pending = button(panel).listeners.click();
+  await flushConsent();
   reply({ ok: false, error: "Start LMU and reach the main menu." });
   await pending;
   assert.equal(changes, 0);
@@ -57,6 +62,7 @@ test("unavailable API leaves the selection alone and allows Retry", async () => 
   assert.equal(button(panel).disabled, false);
   assert.equal(button(panel).textContent, "Retry");
   const retry = button(panel).listeners.click();
+  await flushConsent();
   reply({ ok: true, result: { checkedPacks: [], ownedPacks: [], unresolvedPacks: [] } });
   await retry;
   assert.equal(changes, 1);
@@ -67,6 +73,7 @@ test("late response does not modify a closed checklist", async () => {
   const [panel] = packChecklist(cat, [], () => { changes++; });
   const pending = button(panel).listeners.click();
   panel.isConnected = false;
+  await flushConsent();
   reply({ ok: true, result: { checkedPacks: ["2024-1"], ownedPacks: ["2024-1"], unresolvedPacks: [] } });
   await pending;
   assert.equal(changes, 0);

@@ -20,7 +20,13 @@ public sealed record WeekendTarget(string TrackFolder, string LayoutFile, string
 public sealed record WeekendChange(string Key, string Before, string After);
 public sealed record WeekendCheck(string Key, bool Matches);
 public sealed record WeekendPlan(WeekendTarget Target, string TrackId, string Scene, string CarId,
-    string CarName, JsonObject BeforePreset, string BeforeTrackId, string BeforeCarId, IReadOnlyList<WeekendChange> Changes);
+    string CarName, JsonObject BeforePreset, string BeforeTrackId, string BeforeCarId, IReadOnlyList<WeekendChange> Changes)
+{
+    public bool ReplaceMonitoredOfflineSession { get; init; }
+}
+
+public sealed class LmuOfflineSessionConfirmationRequiredException() : InvalidOperationException(
+    "LMU reports a previous or loaded offline session. Confirm replacement before launching a new weekend.");
 
 /// <summary>
 /// Uses the same preset/selection protocol as LMU's UI. No results API, relative setting writes,
@@ -28,10 +34,11 @@ public sealed record WeekendPlan(WeekendTarget Target, string TrackId, string Sc
 /// </summary>
 public sealed class LmuWeekendClient(HttpClient http)
 {
-    public async Task<WeekendPlan> PreviewAsync(WeekendTarget target, CancellationToken cancellationToken = default)
+    public async Task<WeekendPlan> PreviewAsync(WeekendTarget target, CancellationToken cancellationToken = default,
+        bool replaceMonitoredOfflineSession = false)
     {
         Validate(target);
-        await EnsureMenu(cancellationToken);
+        await EnsureMenu(cancellationToken, replaceMonitoredOfflineSession);
         var scene = LmuTrackLayouts.Scene(target.TrackFolder, target.LayoutFile)
             ?? throw new InvalidOperationException("This layout has no verified LMU API mapping. Set it manually for now.");
         var tracks = await Get("/rest/sessions/getTracksAll", cancellationToken) as JsonArray
@@ -70,12 +77,13 @@ public sealed class LmuWeekendClient(HttpClient http)
         };
         if (target.Sessions is { } sessions) changes.AddRange(sessions.Changes(options, conditions));
         return new(target, Text(track, "id"), scene, Text(car, "id"), carLabel, preset,
-            Text(selection["trackInfo"], "id"), Text(selection["selectedCar"], "id"), changes);
+            Text(selection["trackInfo"], "id"), Text(selection["selectedCar"], "id"), changes)
+            { ReplaceMonitoredOfflineSession = replaceMonitoredOfflineSession };
     }
 
     public async Task<IReadOnlyList<WeekendCheck>> ApplyAsync(WeekendPlan plan, CancellationToken cancellationToken = default)
     {
-        await EnsureMenu(cancellationToken);
+        await EnsureMenu(cancellationToken, plan.ReplaceMonitoredOfflineSession);
         var selection = await Selection(cancellationToken);
         var current = await Preset(cancellationToken);
         if (!JsonNode.DeepEquals(current, plan.BeforePreset) || Text(selection["trackInfo"], "id") != plan.BeforeTrackId ||
@@ -103,7 +111,7 @@ public sealed class LmuWeekendClient(HttpClient http)
 
     public async Task<IReadOnlyList<WeekendCheck>> VerifyAsync(WeekendPlan plan, CancellationToken cancellationToken = default)
     {
-        await EnsureMenu(cancellationToken);
+        await EnsureMenu(cancellationToken, plan.ReplaceMonitoredOfflineSession);
         var selection = await Selection(cancellationToken);
         var preset = await Preset(cancellationToken);
         var options = Section(preset, "Game Options");
@@ -140,13 +148,35 @@ public sealed class LmuWeekendClient(HttpClient http)
         await Post("/rest/sessions/SaveLoad/loadGame", new JsonObject { ["save"] = save }.ToJsonString(), "application/json", cancellationToken);
     }
 
-    private async Task EnsureMenu(CancellationToken ct)
+    private async Task EnsureMenu(CancellationToken ct, bool replaceMonitoredOfflineSession)
     {
         var state = await Get("/navigation/state", ct);
-        if (state?["loadingStatus"]?["loading"]?.GetValue<bool>() == true ||
-            Text(state?["state"], "navigationState") != "NAV_MAIN_MENU" || Text(state?["state"], "settingMode") != "SETTING_GRANDPRIX" ||
-            Text(state?["state"], "gameState") != "GSTATE_SETUP")
-            throw new InvalidOperationException("Return to LMU's offline Race Weekend menu first. A running or loading session will not be changed.");
+        var idle = state?["loadingStatus"]?["loading"]?.GetValue<bool>() == false;
+        var offline = Text(state?["state"], "settingMode") == "SETTING_GRANDPRIX";
+        var navigation = Text(state?["state"], "navigationState");
+        var gameState = Text(state?["state"], "gameState");
+        if (idle && offline && navigation == "NAV_MAIN_MENU" && gameState == "GSTATE_SETUP") return;
+
+        // LMU can retain NAV_EVENT/GSTATE_DYN even on the home/setup UI after an
+        // offline session. Never infer safety from those navigation values alone.
+        // Require a separate explicit replacement confirmation and recheck the
+        // simulation before every apply/verification, not just at preview time.
+        if (idle && offline && navigation == "NAV_EVENT" && gameState == "GSTATE_DYN")
+        {
+            var simulation = await Get("/rest/sessions/GetGameState", ct);
+            if (simulation?["inMonitor"]?.GetValue<bool>() == true &&
+                simulation?["isReplayActive"]?.GetValue<bool>() == false &&
+                simulation?["playerVehicleLoaded"]?.GetValue<bool>() == true)
+            {
+                if (replaceMonitoredOfflineSession) return;
+                throw new LmuOfflineSessionConfirmationRequiredException();
+            }
+        }
+
+        throw new InvalidOperationException("Return to LMU's offline Race Weekend menu first. A running or loading session will not be changed." +
+                $"\nLMU: navigationState={Text(state?["state"], "navigationState")}; " +
+                $"settingMode={Text(state?["state"], "settingMode")}; gameState={Text(state?["state"], "gameState")}; " +
+                $"loading={state?["loadingStatus"]?["loading"]?.ToJsonString() ?? "unknown"}.");
     }
 
     private async Task<JsonObject> Selection(CancellationToken ct) => await Get("/rest/garage/UIScreen/SessionSetup", ct) as JsonObject

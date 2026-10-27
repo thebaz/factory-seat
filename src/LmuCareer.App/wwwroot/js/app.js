@@ -1,4 +1,5 @@
-import { call, onEvent } from "./api.js";
+import { call, onEvent, configureApiConsent } from "./api.js";
+import { apiConsentDialog } from "./apiConsent.js";
 import { h, put, clear, trackSvg, countrySelect } from "./dom.js";
 import { configureSound, sound } from "./sound.js";
 import { applyTheme } from "./theme.js";
@@ -45,16 +46,29 @@ export function countryPicker(value, onChange) {
 // ---------- Modal, confirm and toast ----------
 
 const modalLayer = document.getElementById("modal-layer");
+let modalOnClose = null;
 
-export function showModal(content, { wide = false } = {}) {
+export function showModal(content, { wide = false, onClose = null } = {}) {
+  closeModal();
+  modalOnClose = onClose;
   put(clear(modalLayer), h("div", { class: "modal" + (wide ? " wide" : "") }, content));
   modalLayer.hidden = false;
 }
 
 export function closeModal() {
+  const onClose = modalOnClose;
+  modalOnClose = null;
   modalLayer.hidden = true;
   clear(modalLayer);
+  onClose?.();
 }
+
+configureApiConsent(() => new Promise((resolve) => {
+  let accepted = false;
+  showModal(apiConsentDialog(() => { accepted = true; closeModal(); }, closeModal),
+    { wide: true, onClose: () => resolve(accepted) });
+  modalLayer.querySelector('input[type="checkbox"]')?.focus();
+}));
 
 modalLayer.addEventListener("pointerdown", (e) => { if (e.target === modalLayer) closeModal(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !modalLayer.hidden) closeModal(); });
@@ -62,14 +76,15 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !modalLa
 /** Resolves true when the player confirms. */
 export function confirmDialog(title, body, { confirm = t("Confirm"), danger = false } = {}) {
   return new Promise((resolve) => {
-    const done = (answer) => { closeModal(); resolve(answer); };
+    let accepted = false;
+    const done = (answer) => { accepted = answer; closeModal(); };
     showModal([
       h("h2", {}, title),
       ...(Array.isArray(body) ? body : [h("p", { class: "muted" }, body)]),
       h("div", { class: "modal-actions" },
         h("button", { class: "btn ghost", onclick: () => done(false), "data-sound": "back" }, t("Cancel")),
         h("button", { class: "btn" + (danger ? " danger" : ""), onclick: () => done(true), "data-sound": "confirm" }, confirm)),
-    ]);
+    ], { onClose: () => resolve(accepted) });
   });
 }
 

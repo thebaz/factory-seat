@@ -1,4 +1,4 @@
-import { call } from "../api.js";
+import { call, apiConsentGranted, revokeApiConsent } from "../api.js";
 import { h, put, clear, setting, stepper } from "../dom.js";
 import { state, showModal, closeModal, go, attempt, catalog, toast } from "../app.js";
 import { applyTheme } from "../theme.js";
@@ -80,6 +80,11 @@ export async function openSettings() {
 
       h("div", { class: "rows-title" }, "Le Mans Ultimate"),
       h("div", { class: "rows" },
+        setting(t("LMU API consent"), h("button", { class: "btn ghost small", disabled: !apiConsentGranted(), onclick: () => {
+          revokeApiConsent();
+          render();
+          toast(t("API consent revoked. Manual mode remains available."));
+        } }, t("Revoke API consent"))),
         setting(t("Install folder"), h("button", { class: "btn ghost small", onclick: () => { closeModal(); go("#/setup"); } }, t("Change")),
           { hint: state.lmu?.root ?? t("Not set") })),
 

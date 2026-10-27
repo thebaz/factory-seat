@@ -4,7 +4,26 @@
     "name": "Español (España)",
     "note": "First draft by the developer; needs a native speaker's review. LMU's menu labels checked against the game (10/9)."
   },
+  "API consent": {
+    "Experimental LMU API access": "Acceso experimental a las API de LMU",
+    "These internal, undocumented APIs may change with any LMU patch. Requests can fail or partially change game settings.": "Estas API internas y no documentadas pueden cambiar con cualquier actualización de LMU. Las solicitudes pueden fallar o modificar solo parte de los ajustes del juego.",
+    "The original Factory Seat author is not responsible for developing, maintaining or supporting this fork's API integration. It comes without guarantees; use it at your own risk.": "El autor original de Factory Seat no es responsable del desarrollo, mantenimiento ni soporte de la integración de API de este fork. Se proporciona sin garantías; úsala bajo tu responsabilidad.",
+    "API access can read content ownership and, only when you request assisted launch, change settings and load a weekend. Manual mode and XML results do not require it.": "El acceso a las API permite detectar los contenidos que posees y, solo cuando solicitas un inicio asistido, cambiar ajustes y cargar un fin de semana. El modo manual y los resultados XML no lo necesitan.",
+    "I have read this notice, understand the risks and explicitly consent to using LMU's internal APIs.": "He leído este aviso, entiendo los riesgos y doy mi consentimiento explícito para usar las API internas de LMU.",
+    "Consent lasts until the app is reloaded or closed. You can revoke it in Settings; this does not undo commands already sent.": "El consentimiento dura hasta que se recarga o cierra la aplicación. Puedes revocarlo en Ajustes; esto no deshace las órdenes ya enviadas.",
+    "Enable API access for this session": "Permitir API durante esta sesión",
+    "Stay in manual mode": "Seguir en modo manual",
+    "LMU API consent": "Consentimiento para las API de LMU",
+    "Revoke API consent": "Revocar consentimiento de API",
+    "API consent revoked. Manual mode remains available.": "Consentimiento de API revocado. El modo manual sigue disponible.",
+    "API consent is required. Manual mode remains available.": "Se requiere consentimiento para las API. El modo manual sigue disponible."
+  },
   "Common": {
+    "I understand that unsaved session progress may be lost.": "Entiendo que el progreso de la sesión que no se haya guardado podría perderse.",
+    "Replace the offline session reported by LMU?": "¿Sustituir la sesión sin conexión indicada por LMU?",
+    "LMU may report a previous session even on its home screen. Continuing will replace any loaded offline session with this career weekend. Unsaved session progress may be lost. Only continue if you intend to start a new weekend.": "LMU puede indicar una sesión anterior incluso en su pantalla de inicio. Si continúas, cualquier sesión sin conexión cargada se sustituirá por este fin de semana de carrera. El progreso de la sesión que no se haya guardado podría perderse. Continúa solo si quieres iniciar un nuevo fin de semana.",
+    "Replace session and launch": "Sustituir sesión e iniciar",
+    "Launch cancelled. No LMU settings were changed.": "Inicio cancelado. No se ha modificado ningún ajuste de LMU.",
     "Not set": "Sin definir",
     "Confirm": "Confirmar",
     "Cancel": "Cancelar",

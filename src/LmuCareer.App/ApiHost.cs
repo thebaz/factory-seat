@@ -114,6 +114,14 @@ public sealed class ApiHost : IDisposable
             var method = doc.RootElement.GetProperty("method").GetString() ?? "";
             var args = doc.RootElement.TryGetProperty("args", out var a) ? a.Clone() : default;
 
+            if (method is "detectOwnedContent" or "previewLmuWeekend" or "applyLmuWeekend" or "startLmuWeekend")
+            {
+                if (args.ValueKind != JsonValueKind.Object || !args.TryGetProperty("apiConsent", out var consent) ||
+                    consent.ValueKind != JsonValueKind.True || !args.TryGetProperty("apiConsentVersion", out var version) ||
+                    version.ValueKind != JsonValueKind.String || version.GetString() != "lmu-api-v1")
+                    throw new PlayerError("API consent is required. Manual mode remains available.");
+            }
+
             var result = method switch
             {
                 "detectOwnedContent" => await DetectOwnedContent(),
@@ -128,7 +136,8 @@ public sealed class ApiHost : IDisposable
             or KeyNotFoundException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
         {
             // A problem the player can fix comes with its message as a phrase, for the page to translate.
-            return JsonSerializer.Serialize(new { id, ok = false, error = ex.Message, phrase = (ex as PlayerError)?.Phrase }, Json);
+            return JsonSerializer.Serialize(new { id, ok = false, error = ex.Message, phrase = (ex as PlayerError)?.Phrase,
+                code = ex is LmuOfflineSessionConfirmationRequiredException ? "lmu-offline-session-confirmation-required" : null }, Json);
         }
         catch (Exception ex)
         {
@@ -166,7 +175,8 @@ public sealed class ApiHost : IDisposable
         if (args.TryGetProperty("roundNumber", out var expectedRound) && expectedRound.GetInt32() != career.CurrentSeason.NextRound?.Number)
             throw new PlayerError("The next round changed. Reopen its configuration.");
         var target = WeekendTargetFor(career);
-        var plan = await new LmuWeekendClient(LmuHttp).PreviewAsync(target);
+        var replace = args.TryGetProperty("replaceMonitoredOfflineSession", out var replacement) && replacement.ValueKind == JsonValueKind.True;
+        var plan = await new LmuWeekendClient(LmuHttp).PreviewAsync(target, replaceMonitoredOfflineSession: replace);
         var prepared = new PreparedWeekend(career.Id, career.CurrentSeason.Number, career.CurrentSeason.NextRound!.Number,
             Guid.NewGuid().ToString("N"), JsonSerializer.Serialize(target, Json),
             DateTimeOffset.UtcNow.AddMinutes(5), plan);
@@ -231,6 +241,7 @@ public sealed class ApiHost : IDisposable
         "roundFor" => RoundFor(args),
         "createCareer" => CreateCareer(args),
         "saveWeekendConfiguration" => SaveWeekendConfiguration(args),
+        "startManualWeekend" => StartManualWeekend(args),
         "listCareers" => _store.List(),
         "getCareer" => GetCareer(args),
         "renameCareer" => Change(args, c => c.Name = Str(args, "name").Trim()),
@@ -610,19 +621,49 @@ public sealed class ApiHost : IDisposable
     private object SaveWeekendConfiguration(JsonElement args)
     {
         var career = Load(args);
+        ConfigureWeekend(career, args);
+        _preparedWeekend = null;
+        career.LastPlayedAt = DateTimeOffset.Now;
+        _store.Save(career);
+        return CareerView(career);
+    }
+
+    private static Round ExpectedRound(Career career, JsonElement args)
+    {
         var round = career.CurrentSeason.NextRound ?? throw new PlayerError("There is no upcoming round to configure.");
         if (args.GetProperty("roundNumber").GetInt32() != round.Number)
             throw new PlayerError("The next round changed. Reopen its configuration.");
+        return round;
+    }
+
+    private static void ConfigureWeekend(Career career, JsonElement args)
+    {
+        var round = ExpectedRound(career, args);
         if (round.State != RoundState.Upcoming)
             throw new PlayerError("Cancel the race weekend before changing its settings.");
         var configuration = JsonSerializer.Deserialize<WeekendConfiguration>(args.GetProperty("configuration").GetRawText(), Json)
             ?? throw new PlayerError("Choose supported event settings.");
         try { configuration.Apply(round, (round.GuestCar ?? career.CurrentSeason.Car).CarClass); }
         catch (ArgumentException) { throw new PlayerError("Choose supported event settings."); }
+    }
+
+    /// <summary>Local-only start: no LMU API dependency, even after an uncertain assisted load.</summary>
+    private object StartManualWeekend(JsonElement args)
+    {
+        var career = Load(args);
+        var round = ExpectedRound(career, args);
+        var alreadyStarted = round.State == RoundState.Armed;
+        if (!alreadyStarted)
+        {
+            ConfigureWeekend(career, args);
+            RoundFlow.Arm(career.CurrentSeason, DateTimeOffset.Now);
+            career.LastPlayedAt = DateTimeOffset.Now;
+            _store.Save(career);
+        }
+        // Preserve an existing ArmedAt and its configuration: an uncertain API response may
+        // already have started the weekend. Never discard earlier XML results or reload LMU.
         _preparedWeekend = null;
-        career.LastPlayedAt = DateTimeOffset.Now;
-        _store.Save(career);
-        return CareerView(career);
+        return new { alreadyStarted, view = CareerView(career) };
     }
 
     private object Change(JsonElement args, Action<Career> change)

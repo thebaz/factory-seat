@@ -173,7 +173,7 @@ export async function newCareerView(view) {
       ownedPacks: draft.ownedPacks,
       draft,
       mark: t("Season {number}", { number: 1 }),
-      note: t("Configure each weekend here, launch it in LMU's {mode}, and drive. Results return here through LMU's XML files.", { mode: lmu("Race Weekend") }),
+      note: t("Configure each weekend here, start manually or use optional assisted setup in LMU's {mode}, and drive. Results come from XML.", { mode: lmu("Race Weekend") }),
       confirmLabel: t("Create career"),
       onConfirm: create,
     });

@@ -1,4 +1,5 @@
 // Requests to the app (ApiHost.cs) over WebView2 web messages.
+import { createApiConsentGate, API_CONSENT_VERSION } from "./apiConsent.js";
 // Each call posts { id, method, args } and resolves with the reply that carries the same id.
 
 // The app can also send messages nobody asked for, { event, ... }, such as a race turning up in
@@ -7,6 +8,11 @@
 const pending = new Map();
 const listeners = new Map();
 let nextId = 1;
+const apiConsent = createApiConsentGate();
+const gameMethods = new Set(["detectOwnedContent", "previewLmuWeekend", "applyLmuWeekend", "startLmuWeekend"]);
+export const configureApiConsent = (prompt) => apiConsent.setPrompt(prompt);
+export const revokeApiConsent = () => apiConsent.revoke();
+export const apiConsentGranted = () => apiConsent.granted();
 
 window.chrome?.webview?.addEventListener("message", (event) => {
   const reply = event.data;
@@ -18,7 +24,7 @@ window.chrome?.webview?.addEventListener("message", (event) => {
   if (!waiting) return;
   pending.delete(reply.id);
   if (reply.ok) waiting.resolve(reply.result);
-  else waiting.reject(Object.assign(new Error(reply.error), { phrase: reply.phrase ?? null }));
+  else waiting.reject(Object.assign(new Error(reply.error), { phrase: reply.phrase ?? null, code: reply.code ?? null }));
 });
 
 /** Subscribes to an app event; returns a function that unsubscribes. */
@@ -30,6 +36,16 @@ export function onEvent(name, listener) {
 
 export function call(method, args = {}) {
   if (!window.chrome?.webview) return Promise.reject(new Error("Not running inside the app."));
+  if (gameMethods.has(method)) return apiConsent.request().then((accepted) => {
+    if (!accepted) throw Object.assign(new Error("API consent is required. Manual mode remains available."), {
+      phrase: { text: "API consent is required. Manual mode remains available.", args: {} },
+    });
+    return post(method, { ...args, apiConsent: true, apiConsentVersion: API_CONSENT_VERSION });
+  });
+  return post(method, args);
+}
+
+function post(method, args) {
   const id = nextId++;
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });

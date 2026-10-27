@@ -98,6 +98,65 @@ public class LmuWeekendClientTests
         Assert.Empty(game.Writes);
     }
 
+    [Fact]
+    public async Task Captured_event_state_is_rejected_with_diagnostics_before_any_write()
+    {
+        using var game = new Game { Navigation = "NAV_EVENT", State = "GSTATE_DYN" };
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => game.Client.PreviewAsync(Target));
+        Assert.Contains("navigationState=NAV_EVENT", error.Message);
+        Assert.Contains("gameState=GSTATE_DYN", error.Message);
+        Assert.Contains("settingMode=SETTING_GRANDPRIX", error.Message);
+        Assert.Contains("loading=false", error.Message);
+        Assert.Empty(game.Writes);
+    }
+
+    [Fact]
+    public async Task Home_with_retained_offline_session_requires_confirmation_then_can_apply_and_load()
+    {
+        using var game = new Game { Navigation = "NAV_EVENT", State = "GSTATE_DYN", InMonitor = true };
+        var error = await Assert.ThrowsAsync<LmuOfflineSessionConfirmationRequiredException>(() => game.Client.PreviewAsync(Target));
+        Assert.Empty(game.Writes);
+        var plan = await game.Client.PreviewAsync(Target, replaceMonitoredOfflineSession: true);
+        Assert.All(await game.Client.ApplyAsync(plan), check => Assert.True(check.Matches));
+        await game.Client.StartAsync(plan, () => game.Writes.Add("ARM"));
+        Assert.Equal(1, game.Writes.Count(path => path.EndsWith("loadGame")));
+        Assert.Contains("ARM", game.Writes);
+    }
+
+    [Theory]
+    [InlineData(false, false, false, "SETTING_GRANDPRIX")]
+    [InlineData(true, true, false, "SETTING_GRANDPRIX")]
+    [InlineData(true, false, true, "SETTING_GRANDPRIX")]
+    [InlineData(true, false, false, "SETTING_MULTIPLAYER")]
+    public async Task Replacement_confirmation_never_bypasses_driving_replay_loading_or_online_guards(bool monitor, bool replay, bool loading, string mode)
+    {
+        using var game = new Game { Navigation = "NAV_EVENT", State = "GSTATE_DYN", InMonitor = monitor, Replay = replay, Loading = loading, Mode = mode };
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => game.Client.PreviewAsync(Target, replaceMonitoredOfflineSession: true));
+        Assert.Empty(game.Writes);
+    }
+
+    [Fact]
+    public async Task Leaving_monitor_after_confirmation_blocks_apply_before_writes()
+    {
+        using var game = new Game { Navigation = "NAV_EVENT", State = "GSTATE_DYN", InMonitor = true };
+        var plan = await game.Client.PreviewAsync(Target, replaceMonitoredOfflineSession: true);
+        game.InMonitor = false;
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => game.Client.ApplyAsync(plan));
+        Assert.Empty(game.Writes);
+    }
+
+    [Fact]
+    public async Task Leaving_monitor_after_apply_blocks_arming_and_loading()
+    {
+        using var game = new Game { Navigation = "NAV_EVENT", State = "GSTATE_DYN", InMonitor = true };
+        var plan = await game.Client.PreviewAsync(Target, replaceMonitoredOfflineSession: true);
+        await game.Client.ApplyAsync(plan);
+        game.Writes.Clear();
+        game.InMonitor = false;
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => game.Client.StartAsync(plan, () => Assert.Fail("Must not arm")));
+        Assert.Empty(game.Writes);
+    }
+
     [Theory]
     [InlineData("unknown", null)]
     [InlineData("layoutQatar", "999")]
@@ -249,6 +308,9 @@ public class LmuWeekendClientTests
         public bool Loading { get; init; }
         public string Mode { get; init; } = "SETTING_GRANDPRIX";
         public string State { get; init; } = "GSTATE_SETUP";
+        public string Navigation { get; init; } = "NAV_MAIN_MENU";
+        public bool InMonitor { get; set; }
+        public bool Replay { get; init; }
         public List<string> Writes { get; } = [];
         public JsonObject Preset { get; private set; } = JsonNode.Parse("""
             {"Grid":["opponent"],"Weather":{"Race":{"Sky":1}},"Player":{
@@ -270,8 +332,10 @@ public class LmuWeekendClientTests
             if (request.Method == HttpMethod.Get) result = path switch
             {
                 "/navigation/state" => new JsonObject { ["loadingStatus"] = new JsonObject { ["loading"] = Loading },
-                    ["state"] = new JsonObject { ["navigationState"] = "NAV_MAIN_MENU", ["settingMode"] = Mode, ["gameState"] = State } },
+                    ["state"] = new JsonObject { ["navigationState"] = Navigation, ["settingMode"] = Mode, ["gameState"] = State } },
                 "/rest/sessions/getTracksAll" => new JsonArray(Track()),
+                "/rest/sessions/GetGameState" => new JsonObject { ["inMonitor"] = InMonitor, ["isReplayActive"] = Replay, ["playerVehicleLoaded"] = true,
+                    ["MultiStintState"] = "MONITOR_MENU", ["gamePhase"] = "GPHASE_CHECKERED", ["inControlOfVehicle"] = true },
                 "/rest/sessions/getAllVehicles" => new JsonArray(Car()),
                 "/rest/garage/UIScreen/SessionSetup" => new JsonObject {
                     ["trackInfo"] = _track == "qatar" ? Track() : new JsonObject { ["id"] = _track, ["eventName"] = "Old track", ["sceneDesc"] = "OLD", ["cmpName"] = "Old" },

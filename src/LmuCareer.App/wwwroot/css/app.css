@@ -274,9 +274,15 @@ h1, h2, h3 { font-family: "Barlow Condensed", var(--cjk); text-transform: upperc
 .weekend-setup-actions .btn { white-space: normal; }
 .weekend-setup-status:empty { display: none; }
 .weekend-event-fields:disabled { opacity: 0.65; }
-.manual-weekend { border-top: 1px solid var(--border-soft); padding-top: 12px; font-size: 12px; }
-.manual-weekend summary { cursor: pointer; color: var(--text-dim); }
-.manual-weekend p { margin: 10px 0; }
+.weekend-modes { display: flex; flex-wrap: wrap; gap: 12px 24px; padding-top: 14px; border-top: 1px solid var(--border-soft); }
+.weekend-mode { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+.weekend-mode input { margin: 0; accent-color: var(--accent); }
+.api-consent { display: grid; gap: 14px; }
+.api-consent p, .modal .api-consent h2 { margin: 0; }
+.api-consent-check { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border: 1px solid var(--border-soft); border-radius: 4px; cursor: pointer; font-weight: 600; }
+.api-consent-check input { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); }
+.api-consent .modal-actions { margin-top: 0; flex-wrap: wrap; }
+.api-consent .btn { white-space: normal; }
 .weekend-setup .session-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 760px) {
   .weekend-setup .session-grid, .weekend-selection { grid-template-columns: minmax(0, 1fr); }

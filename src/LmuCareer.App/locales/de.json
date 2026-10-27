@@ -4,7 +4,26 @@
     "name": "Deutsch",
     "note": "First draft by the developer; needs a native speaker's review. LMU's menu labels checked against the game (10/9)."
   },
+  "API consent": {
+    "Experimental LMU API access": "Experimenteller Zugriff auf die LMU-API",
+    "These internal, undocumented APIs may change with any LMU patch. Requests can fail or partially change game settings.": "Diese internen, undokumentierten APIs können sich mit jedem LMU-Patch ändern. Anfragen können fehlschlagen oder Spieleinstellungen nur teilweise ändern.",
+    "The original Factory Seat author is not responsible for developing, maintaining or supporting this fork's API integration. It comes without guarantees; use it at your own risk.": "Der ursprüngliche Autor von Factory Seat ist nicht für Entwicklung, Wartung oder Support der API-Integration dieses Forks verantwortlich. Sie wird ohne Garantien bereitgestellt; die Nutzung erfolgt auf eigenes Risiko.",
+    "API access can read content ownership and, only when you request assisted launch, change settings and load a weekend. Manual mode and XML results do not require it.": "Der API-Zugriff kann verfügbare Inhalte erkennen und nur bei einem angeforderten assistierten Start Einstellungen ändern und ein Wochenende laden. Der manuelle Modus und XML-Ergebnisse benötigen ihn nicht.",
+    "I have read this notice, understand the risks and explicitly consent to using LMU's internal APIs.": "Ich habe diesen Hinweis gelesen, verstehe die Risiken und stimme der Nutzung der internen APIs von LMU ausdrücklich zu.",
+    "Consent lasts until the app is reloaded or closed. You can revoke it in Settings; this does not undo commands already sent.": "Die Zustimmung gilt, bis die App neu geladen oder geschlossen wird. Sie kann in den Einstellungen widerrufen werden; bereits gesendete Befehle werden dadurch nicht rückgängig gemacht.",
+    "Enable API access for this session": "API-Zugriff für diese Sitzung erlauben",
+    "Stay in manual mode": "Im manuellen Modus bleiben",
+    "LMU API consent": "Zustimmung zur LMU-API",
+    "Revoke API consent": "API-Zustimmung widerrufen",
+    "API consent revoked. Manual mode remains available.": "API-Zustimmung widerrufen. Der manuelle Modus bleibt verfügbar.",
+    "API consent is required. Manual mode remains available.": "Die Zustimmung zur API ist erforderlich. Der manuelle Modus bleibt verfügbar."
+  },
   "Common": {
+    "I understand that unsaved session progress may be lost.": "Ich verstehe, dass nicht gespeicherter Sitzungsfortschritt verloren gehen kann.",
+    "Replace the offline session reported by LMU?": "Die von LMU gemeldete Offline-Sitzung ersetzen?",
+    "LMU may report a previous session even on its home screen. Continuing will replace any loaded offline session with this career weekend. Unsaved session progress may be lost. Only continue if you intend to start a new weekend.": "LMU kann auch auf der Startseite eine vorherige Sitzung melden. Wenn du fortfährst, wird eine eventuell geladene Offline-Sitzung durch dieses Karrierewochenende ersetzt. Nicht gespeicherter Sitzungsfortschritt kann verloren gehen. Fahre nur fort, wenn du ein neues Wochenende starten möchtest.",
+    "Replace session and launch": "Sitzung ersetzen und starten",
+    "Launch cancelled. No LMU settings were changed.": "Start abgebrochen. Es wurden keine LMU-Einstellungen geändert.",
     "Not set": "Nicht festgelegt",
     "Confirm": "Bestätigen",
     "Cancel": "Abbrechen",
