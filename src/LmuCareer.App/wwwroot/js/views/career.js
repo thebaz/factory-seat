@@ -5,6 +5,7 @@ import { sound } from "../sound.js";
 import { runTour, tourRunning } from "../tour.js";
 import { tierName, kindName, CLASS_NAMES, target, livery, carNumbers, offerFacts, standing, signed } from "./offers.js";
 import { packChecklist } from "./packs.js";
+import { weekendSetup, launchConfiguredWeekend } from "./weekendSetup.js";
 import { t, tn, lmu, mark, number, dateTime, capitalize, midSentence, countryName, currentLanguage } from "../i18n.js";
 
 let stopListening = null;
@@ -43,18 +44,6 @@ const ROUND_STATES = { Upcoming: mark("Upcoming"), Armed: mark("In progress"), C
 const RATINGS = { Bronze: mark("Bronze"), Silver: mark("Silver"), Gold: mark("Gold"), Platinum: mark("Platinum") };
 
 const TONES = { Humble: mark("Humble"), Confident: mark("Confident"), BlameTeam: mark("Blame the team") };
-
-// Briefing rows the player has ticked off as set in LMU, per round, kept in this PC's browser
-// storage until the round counts. Only a helper: nothing waits on them.
-const ticksKey = (id, season, round) => `ticks:${id}:${season}:${round}`;
-
-function loadTicks(key) {
-  try { return new Set(JSON.parse(localStorage.getItem(key) ?? "[]")); } catch { return new Set(); }
-}
-
-function saveTicks(key, ticks) {
-  try { if (ticks.size) localStorage.setItem(key, JSON.stringify([...ticks])); else localStorage.removeItem(key); } catch { /* not kept */ }
-}
 
 /** A sponsor's name as players in its own language know it (성심당 for a Korean player), else as written. */
 const sponsorName = (deal) => (deal.localName && currentLanguage().startsWith("ko") ? deal.localName : deal.name);
@@ -232,26 +221,10 @@ export async function careerView(view, id, tab) {
 
     const track = tracks.get(round.trackFolder);
     const car = season().car;
-    const fuel = round.fuelMultiplier > 1 ? `x${round.fuelMultiplier}` : lmu("Real");
-    const tyres = round.tireMultiplier > 1 ? `x${round.tireMultiplier}` : lmu("Real");
     const isArmed = round.state === "Armed";
     const month = events.get(round.eventId)?.month;
     const map = mapFor(round);
     setBackdropTrack(map);
-
-    const key = ticksKey(id, season().number, round.number);
-    const ticks = loadTicks(key);
-    const items = ["circuit", "layout", "car", "length", "fuel", "tyres", "start", "timeScale"];
-    const counter = h("span", { class: "faint" });
-    const count = () => {
-      counter.textContent = t("{done} of {total} set", { done: items.filter((x) => ticks.has(x)).length, total: items.length });
-    };
-    count();
-    const tick = (item) => ({
-      on: ticks.has(item),
-      title: t("Tick it off once it's set in LMU"),
-      onToggle: (on) => { if (on) ticks.add(item); else ticks.delete(item); saveTicks(key, ticks); count(); },
-    });
 
     put(view,
       h("div", { class: "hero" },
@@ -269,34 +242,36 @@ export async function careerView(view, id, tab) {
         map ? h("figure", { class: "hero-map" }, trackSvg(map), h("figcaption", {}, maps.attribution)) : null),
       inboxStrip(),
       round.guest ? guestNotice(round) : firstRace(isArmed),
-      raceAhead(isArmed),
-      h("div", { class: "grid-2", style: { gridTemplateColumns: "1.25fr 1fr", alignItems: "start" } },
-        h("div", {},
-          h("div", { class: "row", style: { alignItems: "baseline", marginBottom: "14px" } },
-            h("div", { class: "section-title", style: { margin: 0 } }, t("Set up in LMU")), h("div", { class: "spacer" }), counter),
-          h("div", { class: "lmu-path" }, lmu("Circuit")),
-          h("div", { class: "rows", style: { marginBottom: "16px" } },
-            setting(lmu("Circuit"), track?.name ?? round.trackCourse, { big: true, tick: tick("circuit") }),
-            setting(lmu("Layout"), layoutName(round), { big: true, tick: tick("layout") })),
-          h("div", { class: "lmu-path" }, lmu("Car")),
-          h("div", { class: "rows", style: { marginBottom: "16px" } }, round.guest ? guestCarRow(round, tick("car")) : carRow(car, tick("car"))),
-          h("div", { class: "lmu-path" }, lmu("Event settings")),
-          h("div", { class: "rows" },
-            setting(lmu("Practice"), t("Optional"), { hint: t("Run as much or as little as you like. After you start the weekend, your engineer reads it for pace."), untickable: true }),
-            setting(lmu("Qualifying"), t("Optional"), { hint: t("Skip it and LMU starts you from the back of the grid."), untickable: true }),
-            setting(lmu("Race length"), formatMinutes(round.raceMinutes), { big: true, tick: tick("length") }),
-            setting(lmu("Fuel Usage"), fuel, { big: true, hint: lmu("Event Settings › Advanced"), tick: tick("fuel") }),
-            setting(lmu("Tyre Wear"), tyres, { big: true, hint: lmu("Event Settings › Advanced"), tick: tick("tyres") }),
-            setting(lmu("Race start time"), round.startTime || lmu("Default"), { big: true, hint: lmu("Event Settings › Sessions"), tick: tick("start") }),
-            setting(lmu("Time Scale"), round.timeScale > 1 ? `X${round.timeScale}` : lmu("Normal"), { big: true, hint: lmu("Event Settings › Advanced"), tick: tick("timeScale") }))),
+      h("section", { class: "weekend-configuration" },
+          h("h2", { class: "section-title" }, t("Weekend configuration")),
+          h("div", { class: "weekend-selection rows" },
+            setting(lmu("Circuit"), track?.name ?? round.trackCourse),
+            setting(lmu("Layout"), layoutName(round)),
+            round.guest ? guestCarRow(round) : carRow(car)),
+          weekendSetup(round, state.settings.weekendSessions, {
+            onSave: async (configuration) => {
+              data = await call("saveWeekendConfiguration", { id, roundNumber: round.number, configuration });
+              show("briefing");
+            },
+            onLaunch: async (configuration, progress) => {
+              const result = await launchConfiguredWeekend(call, { id, roundNumber: round.number, configuration }, progress);
+              data = result.view;
+              toast(t("Launch requested. Switch to LMU; results will still be read from XML."));
+              show("briefing");
+            },
+          })),
+      h("div", { class: "briefing-grid" },
         h("div", {},
           h("div", { class: "section-title" }, t("Race weekend")),
           weekendPanel(round, isArmed),
-          h("div", { class: "section-title", style: { marginTop: "24px" } }, state.features?.aiDriverSwaps ? t("Stint plan") : t("Pit plan")),
+          pacePanel()),
+        h("div", {},
+           h("div", { class: "section-title", style: { marginTop: "24px" } }, state.features?.aiDriverSwaps ? t("Stint plan") : t("Pit plan")),
+           h("p", { class: "session-help muted" }, t("Plan based on the saved race configuration.")),
           state.features?.aiDriverSwaps ? stintPlan(round) : pitPlan(round),
-          pacePanel(),
           sponsorPanel(),
-          guestPanel())));
+           guestPanel())),
+       raceAhead(isArmed));
   }
 
   /** Until a career's first race counts: the app plans the race, the player sets it up and drives it in LMU. */
@@ -315,37 +290,37 @@ export async function careerView(view, id, tab) {
         } }, t("Got it"))),
       h("div", { class: "grid-3" },
         [
-          [isArmed ? "✓" : 1, t("Start the race weekend"), t("Press {button} on the right. Only races that finish after that count.", { button: t("Start race weekend") })],
-          [2, t("Set it up in LMU yourself"), t("Factory Seat doesn't change the game. In LMU's {mode}, pick the circuit, car and settings listed below, and tick each one off.", { mode: lmu("Race Weekend") })],
+          [1, t("Weekend configuration"), t("Choose event settings, practice and qualifying here. Each race keeps its own choices.")],
+          [isArmed ? "✓" : 2, t("Launch weekend in LMU"), t("One action applies and verifies your settings, enables result tracking and loads the weekend.")],
           [3, t("Race, and leave this app open"), t("When the race ends, the result pops up here. Long race? Save it in LMU and finish it another day.")],
         ].map(([n, title, text]) => h("div", { class: "checklist-step" },
           h("div", { class: "n" }, n), h("div", {}, h("b", {}, title), h("div", { class: "muted" }, text))))));
     return card;
   }
 
-  function carRow(car, tick) {
+  function carRow(car) {
     const numbers = season().contract?.numbers ?? [];
     const name = data.carName || car.carType || t("Your car");
     if (car.customTeam) {
-      return setting(name, t("Custom team"), { big: true, tick,
+      return setting(name, t("Custom team"), { big: true,
         hint: t("Your {team} car, any number you like (last raced as #{n}).", { team: car.teamName || t("custom team"), n: car.carNumber }) });
     }
     if (car.carNumber) {
-      return setting(name, `#${car.carNumber}`, { big: true, tick,
+      return setting(name, `#${car.carNumber}`, { big: true,
         hint: car.teamName ? t("Racing for {team}", { team: car.teamName }) : t("Same number as your last race") });
     }
-    return setting(name, numbers.length ? carNumbers(numbers) : t("Any livery"), { big: true, tick,
+    return setting(name, numbers.length ? carNumbers(numbers) : t("Any livery"), { big: true,
       hint: numbers.length
-        ? t("Pick the {team} livery. Your first race sets your number for the season.", { team: teamName() })
-        : t("Pick any livery for this car. Your first race sets your number and team for the season.") });
+        ? t("Livery assigned by {team}. Your first race records your number for the season.", { team: teamName() })
+        : t("Any accessible livery for this car. Your first race records your number and team for the season.") });
   }
 
   /** A guest drive is in the guest team's car, not the season's. */
-  function guestCarRow(round, tick) {
+  function guestCarRow(round) {
     const car = round.guestCar;
     const numbers = round.guestNumbers ?? [];
     const value = car.carNumber ? `#${car.carNumber}` : numbers.length ? carNumbers(numbers) : t("Any livery");
-    return setting(carName(car.carType), value, { big: true, tick,
+    return setting(carName(car.carType), value, { big: true,
       hint: numbers.length || car.carNumber ? t("Pick the {team} livery.", { team: car.teamName }) : t("Any livery: you're guesting for {team}.", { team: car.teamName }) });
   }
 
@@ -444,6 +419,7 @@ export async function careerView(view, id, tab) {
 
   /** You drive every lap; Fuel Usage puts the stops where the real race's would fall. */
   function pitPlan(round) {
+    if (round.stints <= 1) return h("div", { class: "card quiet muted" }, t("No fuel stop is planned at these saved settings. Check consumption in LMU."));
     const stint = Math.round(round.raceMinutes / round.stints);
     const stops = round.stints - 1;
     const fuel = round.fuelMultiplier > 1 ? "x" + round.fuelMultiplier : lmu("Real");
@@ -497,9 +473,12 @@ export async function careerView(view, id, tab) {
 
     if (!isArmed) {
       put(panel,
-        h("div", { class: "muted" }, t("Start the weekend here first, then set it up in LMU. Only races after this point count, so a test drive or an online race never does.")),
+        h("div", { class: "muted" }, t("Choose this race's settings and launch from the configuration panel. Result tracking starts automatically before loading.")),
+        h("details", { class: "manual-weekend" },
+          h("summary", {}, t("Manual launch / saved race")),
+          h("p", { class: "muted" }, t("Only for manual setup or a race saved in LMU: enable XML tracking without sending game commands.")),
+          h("button", { class: "btn ghost small", "data-sound": "confirm", onclick: arm }, t("Enable result tracking only"))),
         h("div", { class: "row" },
-          h("button", { class: "btn", "data-sound": "confirm", onclick: arm }, t("Start race weekend")),
           h("div", { class: "spacer" }),
           h("button", { class: "btn ghost small", onclick: skip }, t("Skip round"))));
       return panel;
@@ -977,8 +956,11 @@ export async function careerView(view, id, tab) {
   /** Changes which DLC packs the career counts as owned; the season already on the calendar stays as it is. */
   function editContent() {
     let owned = [...data.career.ownedContent];
+    let detectionReport = null;
     const body = h("div");
-    const render = () => put(clear(body), packChecklist(cat, owned, (next) => { owned = next; render(); }));
+    const render = () => put(clear(body), packChecklist(cat, owned, (next, report = null) => {
+      owned = next; detectionReport = report; render();
+    }, detectionReport));
     render();
     showModal([
       h("h2", {}, t("Your content")),

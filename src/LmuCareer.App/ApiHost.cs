@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LmuCareer.Core;
@@ -12,7 +13,7 @@ namespace LmuCareer.App;
 /// What the page can ask the app to do. The page posts <c>{ id, method, args }</c>; the reply is
 /// <c>{ id, ok, result }</c> or <c>{ id, ok: false, error }</c>.
 /// </summary>
-public sealed class ApiHost
+public sealed class ApiHost : IDisposable
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -26,11 +27,21 @@ public sealed class ApiHost
     private readonly CareerStore _store = new(CareerStore.DefaultRoot);
     private readonly ContentCatalog _catalog = ContentCatalog.Default;
     private readonly ResultsWatcher _watcher;
+    private static readonly HttpClient LmuHttp = new(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false })
+    {
+        BaseAddress = new Uri("http://localhost:6397"),
+        Timeout = TimeSpan.FromSeconds(8),
+    };
     private LmuInstall? _install;
 
     // The career whose screen is open: only it listens for new results.
     private Guid? _watchedCareer;
     private string? _lastPosted;
+    private PreparedWeekend? _preparedWeekend;
+    private readonly SemaphoreSlim _requests = new(1, 1);
+
+    private sealed record PreparedWeekend(Guid CareerId, int SeasonNumber, int RoundNumber, string Token, string TargetJson, DateTimeOffset ExpiresAt,
+        WeekendPlan Plan, bool Verified = false);
 
     public ApiHost(MainWindow window)
     {
@@ -86,9 +97,16 @@ public sealed class ApiHost
         }, Json));
     }
 
-    public string Handle(string message)
+    public async Task<string> HandleAsync(string message)
     {
-        JsonElement id = default;
+        await _requests.WaitAsync();
+        try { return await HandleMessageAsync(message); }
+        finally { _requests.Release(); }
+    }
+
+    private async Task<string> HandleMessageAsync(string message)
+    {
+        JsonElement id = JsonSerializer.SerializeToElement<object?>(null);
         try
         {
             using var doc = JsonDocument.Parse(message);
@@ -96,7 +114,14 @@ public sealed class ApiHost
             var method = doc.RootElement.GetProperty("method").GetString() ?? "";
             var args = doc.RootElement.TryGetProperty("args", out var a) ? a.Clone() : default;
 
-            var result = Dispatch(method, args);
+            var result = method switch
+            {
+                "detectOwnedContent" => await DetectOwnedContent(),
+                "previewLmuWeekend" => await PreviewLmuWeekend(args),
+                "applyLmuWeekend" => await ApplyLmuWeekend(args),
+                "startLmuWeekend" => await StartLmuWeekend(args),
+                _ => Dispatch(method, args),
+            };
             return JsonSerializer.Serialize(new { id, ok = true, result }, Json);
         }
         catch (Exception ex) when (ex is InvalidOperationException or IOException or JsonException
@@ -111,6 +136,81 @@ public sealed class ApiHost
             Log($"App error: {ex}");
             return JsonSerializer.Serialize(new { id, ok = false, error = ex.Message, phrase = (Phrase?)null }, Json);
         }
+    }
+
+    private static async Task<object> DetectOwnedContent()
+    {
+        try
+        {
+            return await new LmuContentClient(LmuHttp).DetectAsync(ContentCatalog.Default);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+            throw new PlayerError("LMU's API is not ready. Start Le Mans Ultimate, reach the main menu, then try again.");
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidDataException)
+        {
+            throw new PlayerError("LMU returned unsupported content information. Your selection has not changed; you can select packs manually.");
+        }
+    }
+
+    private WeekendTarget WeekendTargetFor(Career career) => WeekendTarget.From(
+        BriefingFile.For(career, ContentCatalog.Default, Updates.CurrentLabel, DateTimeOffset.Now).Round
+            ?? throw new PlayerError("There is no upcoming round to configure.")) with {
+                Sessions = career.CurrentSeason.NextRound?.WeekendSessions ?? _settings.WeekendSessions ?? new() };
+
+    private async Task<object> PreviewLmuWeekend(JsonElement args)
+    {
+        _preparedWeekend = null;
+        var career = Load(args);
+        if (args.TryGetProperty("roundNumber", out var expectedRound) && expectedRound.GetInt32() != career.CurrentSeason.NextRound?.Number)
+            throw new PlayerError("The next round changed. Reopen its configuration.");
+        var target = WeekendTargetFor(career);
+        var plan = await new LmuWeekendClient(LmuHttp).PreviewAsync(target);
+        var prepared = new PreparedWeekend(career.Id, career.CurrentSeason.Number, career.CurrentSeason.NextRound!.Number,
+            Guid.NewGuid().ToString("N"), JsonSerializer.Serialize(target, Json),
+            DateTimeOffset.UtcNow.AddMinutes(5), plan);
+        _preparedWeekend = prepared;
+        return new { token = prepared.Token, plan.CarName, changes = plan.Changes };
+    }
+
+    private PreparedWeekend Prepared(JsonElement args)
+    {
+        var career = Load(args);
+        var prepared = _preparedWeekend;
+        if (prepared is null || prepared.CareerId != career.Id || prepared.SeasonNumber != career.CurrentSeason.Number ||
+            prepared.RoundNumber != career.CurrentSeason.NextRound?.Number || prepared.Token != Str(args, "token") ||
+            prepared.ExpiresAt < DateTimeOffset.UtcNow || prepared.TargetJson != JsonSerializer.Serialize(WeekendTargetFor(career), Json))
+            throw new PlayerError("The weekend preview has expired or the briefing changed. Preview it again.");
+        if (!args.TryGetProperty("confirmed", out var confirmed) || confirmed.ValueKind != JsonValueKind.True)
+            throw new PlayerError("Confirm the changes before sending commands to LMU.");
+        return prepared;
+    }
+
+    private async Task<object> ApplyLmuWeekend(JsonElement args)
+    {
+        var prepared = Prepared(args);
+        _preparedWeekend = prepared with { Verified = false };
+        var checks = await new LmuWeekendClient(LmuHttp).ApplyAsync(prepared.Plan);
+        var verified = checks.All(c => c.Matches);
+        _preparedWeekend = prepared with { Verified = verified };
+        return new { verified, checks };
+    }
+
+    private async Task<object> StartLmuWeekend(JsonElement args)
+    {
+        var prepared = Prepared(args);
+        if (!prepared.Verified) throw new PlayerError("Configure and verify the weekend before launching LMU.");
+        // Consume before any launch request: an uncertain response must never trigger an automatic retry.
+        _preparedWeekend = null;
+        var career = Load(args);
+        await new LmuWeekendClient(LmuHttp).StartAsync(prepared.Plan, () =>
+        {
+            RoundFlow.Arm(career.CurrentSeason, DateTimeOffset.Now);
+            _store.Save(career);
+            WriteBriefing(career);
+        });
+        return new { requested = true, view = CareerView(career) };
     }
 
     private object? Dispatch(string method, JsonElement args) => method switch
@@ -130,6 +230,7 @@ public sealed class ApiHost
             Strings(args, "ownedPacks"), _install),
         "roundFor" => RoundFor(args),
         "createCareer" => CreateCareer(args),
+        "saveWeekendConfiguration" => SaveWeekendConfiguration(args),
         "listCareers" => _store.List(),
         "getCareer" => GetCareer(args),
         "renameCareer" => Change(args, c => c.Name = Str(args, "name").Trim()),
@@ -326,6 +427,15 @@ public sealed class ApiHost
 
     private AppSettings SetPrefs(JsonElement args)
     {
+        // Validate before changing any preference, so invalid session input cannot be partly saved.
+        if (args.TryGetProperty("weekendSessions", out var sessionJson))
+        {
+            var sessions = JsonSerializer.Deserialize<WeekendSessions>(sessionJson.GetRawText(), Json)
+                ?? throw new ArgumentException("Session choices cannot be empty.");
+            sessions.Validate();
+            _settings.WeekendSessions = sessions;
+            _preparedWeekend = null;
+        }
         if (args.TryGetProperty("theme", out var theme)) _settings.Theme = theme.GetString() ?? "system";
         if (args.TryGetProperty("language", out var language)) _settings.Language = language.GetString() is { Length: > 0 } code ? code : "auto";
         if (args.TryGetProperty("soundVolume", out var volume)) _settings.SoundVolume = Math.Clamp(volume.GetDouble(), 0, 1);
@@ -495,6 +605,24 @@ public sealed class ApiHost
         Inbox.MarkRead(career, args.TryGetProperty("messageId", out var message) ? message.GetString() : null);
         _store.Save(career);
         return CareerViewData(career);
+    }
+
+    private object SaveWeekendConfiguration(JsonElement args)
+    {
+        var career = Load(args);
+        var round = career.CurrentSeason.NextRound ?? throw new PlayerError("There is no upcoming round to configure.");
+        if (args.GetProperty("roundNumber").GetInt32() != round.Number)
+            throw new PlayerError("The next round changed. Reopen its configuration.");
+        if (round.State != RoundState.Upcoming)
+            throw new PlayerError("Cancel the race weekend before changing its settings.");
+        var configuration = JsonSerializer.Deserialize<WeekendConfiguration>(args.GetProperty("configuration").GetRawText(), Json)
+            ?? throw new PlayerError("Choose supported event settings.");
+        try { configuration.Apply(round, (round.GuestCar ?? career.CurrentSeason.Car).CarClass); }
+        catch (ArgumentException) { throw new PlayerError("Choose supported event settings."); }
+        _preparedWeekend = null;
+        career.LastPlayedAt = DateTimeOffset.Now;
+        _store.Save(career);
+        return CareerView(career);
     }
 
     private object Change(JsonElement args, Action<Career> change)
@@ -702,6 +830,8 @@ public sealed class ApiHost
         complete = check.Session.IsComplete,
         player = check.Session.Player is { } p ? new { p.Name, p.CarType, p.CarNumber, p.ClassPosition, p.Status, p.Laps } : null,
     };
+
+    public void Dispose() => _watcher.Dispose();
 
     private static string Str(JsonElement args, string name) =>
         args.ValueKind == JsonValueKind.Object && args.TryGetProperty(name, out var v) ? v.GetString() ?? "" : "";

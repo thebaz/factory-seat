@@ -15,7 +15,7 @@ The file stays when the player leaves the career or closes Factory Seat, with `o
 didn't close cleanly (a crash, a forced shutdown), `open` can be left `true`; checking that
 `FactorySeat.exe` is running covers that.
 
-It's a file, not a server: Factory Seat stays off the network. Read it as often as you like; watch
+It's a file, not a server: briefing export does not use the network. Read it as often as you like; watch
 the folder for changes rather than reading it in a tight loop.
 
 ## Versions

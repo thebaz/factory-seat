@@ -56,6 +56,8 @@ public sealed class Round
     public double TimeScale { get; set; } = 1;
     public double FuelMultiplier { get; set; } = 1;
     public double TireMultiplier { get; set; } = 1;
+    /// <summary>Per-round session choices; null on older/unconfigured rounds uses the app's defaults.</summary>
+    public Content.WeekendSessions? WeekendSessions { get; set; }
     public decimal PointsWeight { get; set; } = 1;
 
     /// <summary>Share of the laps the player must drive to score driver points; 0 = no minimum.</summary>

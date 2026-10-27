@@ -23,3 +23,4 @@ Each release's notes list the installer's **SHA-256 hash** and its **VirusTotal*
 - It reads LMU's results files and race weekend saves. It never changes LMU's files.
 - It saves your careers and settings in `%AppData%\LmuCareer`.
 - Its only online request is an optional check for a newer release on GitHub, which you can turn off in Settings. It collects no data and has no accounts or servers. The [README](README.md) has the details.
+- Content detection reads access information from LMU's local API at `http://localhost:6397`. Clicking **Launch weekend in LMU** explicitly authorizes applying and verifying the configured settings, then loading the weekend. The client does not automatically retry game commands, and loading is blocked when verification fails. No game data is sent to an external service; race results are read exclusively from XML files.

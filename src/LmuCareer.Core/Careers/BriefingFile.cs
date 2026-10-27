@@ -8,7 +8,7 @@ namespace LmuCareer.Core.Careers;
 /// <summary>
 /// The open career's next race, written as briefing.json next to the saves for companion apps
 /// (an overlay that checks LMU's settings against it, say) to read. It's a file, not a server:
-/// the app stays off the network. Values are LMU's own (layout files, car types, multipliers),
+/// briefing export does not use the network. Values are LMU's own (layout files, car types, multipliers),
 /// not the words on screen, so a companion can compare them with what the game reports.
 /// </summary>
 /// <remarks>

@@ -26,7 +26,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         _api = new ApiHost(this);
         Loaded += async (_, _) => await StartAsync();
-        Closing += (_, _) => ApiHost.Closing();
+        Closing += (_, _) => { ApiHost.Closing(); _api.Dispose(); };
     }
 
     private async Task StartAsync()
@@ -59,7 +59,10 @@ public partial class MainWindow : Window
 
         core.AddWebResourceRequestedFilter($"https://{Host}/*", CoreWebView2WebResourceContext.All);
         core.WebResourceRequested += ServeEmbeddedFile;
-        core.WebMessageReceived += (_, e) => core.PostWebMessageAsJson(_api.Handle(e.WebMessageAsJson));
+        core.WebMessageReceived += async (_, e) =>
+        {
+            core.PostWebMessageAsJson(await _api.HandleAsync(e.WebMessageAsJson));
+        };
 
         // Anything that isn't the app's own pages opens in the player's browser instead.
         core.NavigationStarting += (_, e) =>

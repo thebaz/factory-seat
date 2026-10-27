@@ -23,9 +23,12 @@ public sealed class AppSettings
 
     public bool Muted { get; set; }
 
+    /// <summary>Remembered pre-race session choices; keep existing LMU settings unless explicitly changed.</summary>
+    public WeekendSessions WeekendSessions { get; set; } = new();
+
     /// <summary>
     /// Ask GitHub for a newer release when the app starts, and for its highlights for the update
-    /// card. The app's only network calls.
+    /// card. Content detection separately reads the running game's loopback API on request.
     /// </summary>
     public bool CheckForUpdates { get; set; } = true;
 

@@ -39,6 +39,7 @@ export async function newCareerView(view) {
     seasonFor: null,
   };
   let tab = "driver";
+  let contentDetection = null;
 
   const owns = (pack) => pack === null || pack === "base" || draft.ownedPacks.includes(pack);
 
@@ -92,7 +93,7 @@ export async function newCareerView(view) {
   // ---------- Content ----------
 
   function content() {
-    const change = (owned) => { draft.ownedPacks = owned; draft.rounds = null; show("content"); };
+    const change = (owned, report = null) => { draft.ownedPacks = owned; contentDetection = report; draft.rounds = null; show("content"); };
 
     put(view,
       h("div", { class: "hero" },
@@ -101,9 +102,9 @@ export async function newCareerView(view) {
           h("h1", { class: "hero-title" }, t("What do you own?")),
           h("div", { class: "hero-facts" }, t("Tick the DLC packs you've bought. The default calendar and car list only use what you own.")))),
       h("div", { class: "notice info", style: { marginBottom: "18px", maxWidth: "820px" } },
-        h("b", {}, t("Why the app can't check this itself")),
-        h("div", {}, t("LMU installs every pack's files whether you own it or not, so they're all on your PC either way. If you pick a track or car you don't own, you won't be able to run that round and your career can't move past it."))),
-      h("div", { style: { maxWidth: "820px" } }, packChecklist(cat, draft.ownedPacks, change)),
+        h("b", {}, t("Detect content with LMU running")),
+        h("div", {}, t("Installed files do not prove ownership. Detection reads access to cars and tracks from the running game, including subscription access."))),
+      h("div", { style: { maxWidth: "820px" } }, packChecklist(cat, draft.ownedPacks, change, contentDetection)),
       footer(next("car")));
   }
   // ---------- Car ----------
@@ -172,7 +173,7 @@ export async function newCareerView(view) {
       ownedPacks: draft.ownedPacks,
       draft,
       mark: t("Season {number}", { number: 1 }),
-      note: t("Factory Seat plans each race; you set it up and drive it in LMU's {mode}, and the result comes back here.", { mode: lmu("Race Weekend") }),
+      note: t("Configure each weekend here, launch it in LMU's {mode}, and drive. Results return here through LMU's XML files.", { mode: lmu("Race Weekend") }),
       confirmLabel: t("Create career"),
       onConfirm: create,
     });

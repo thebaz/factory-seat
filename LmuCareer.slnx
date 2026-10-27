@@ -5,6 +5,7 @@
     <Project Path="src/LmuCareer.Core/LmuCareer.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/LmuCareer.App.Tests/LmuCareer.App.Tests.csproj" />
     <Project Path="tests/LmuCareer.Core.Tests/LmuCareer.Core.Tests.csproj" />
   </Folder>
 </Solution>

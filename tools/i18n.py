@@ -42,6 +42,8 @@ GROUPS = [
     ("careers.js", "Careers"),
     ("newCareer.js", "New career"),
     ("packs.js", "DLC packs"),
+    ("weekendSessions.js", "Practice and qualifying"),
+    ("weekendSetup.js", "Race weekend configuration"),
     ("seasonBuilder.js", "Season builder"),
     ("nextSeason.js", "Season builder"),
     ("career.js", "Career"),

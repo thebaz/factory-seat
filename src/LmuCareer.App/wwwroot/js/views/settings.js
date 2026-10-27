@@ -4,6 +4,7 @@ import { state, showModal, closeModal, go, attempt, catalog, toast } from "../ap
 import { applyTheme } from "../theme.js";
 import { configureSound, sound } from "../sound.js";
 import { t } from "../i18n.js";
+import { weekendSessionsEditor, sessionSummary } from "./weekendSessions.js";
 
 // Settings: language, theme, interface sounds, the LMU folder, the liveries you've built, and the about box.
 
@@ -82,6 +83,14 @@ export async function openSettings() {
         setting(t("Install folder"), h("button", { class: "btn ghost small", onclick: () => { closeModal(); go("#/setup"); } }, t("Change")),
           { hint: state.lmu?.root ?? t("Not set") })),
 
+      h("div", { class: "rows-title" }, t("Default practice and qualifying")),
+      h("div", { class: "rows" }, setting(t("Session choices"), h("button", { class: "btn ghost small", onclick: () => {
+        showModal(weekendSessionsEditor(state.settings.weekendSessions, async (choices) => {
+          state.settings = await call("setPrefs", { weekendSessions: choices });
+          await openSettings();
+        }, openSettings), { wide: true });
+      } }, t("Edit session choices")), { hint: [t("Defaults for races without their own saved configuration."), " ", sessionSummary(s.weekendSessions)] })),
+
       h("div", { class: "rows-title" }, t("My sponsor liveries")),
       h("div", { class: "faint", style: { fontSize: "12px", marginBottom: "6px" } },
         t("Built one of these in LMU? Tick it, and that sponsor calls much more often when you're in a car it suits.")),
@@ -108,7 +117,7 @@ export async function openSettings() {
         h("p", { class: "row" }, h("b", {}, t("Version {version}", { version: state.version })), h("span", { class: "spacer" }),
           h("button", { class: "btn ghost small", title: t("Opens Ko-fi in your browser"), onclick: () => window.open("https://ko-fi.com/factoryseatlmuapp") },
             t("Buy me a coffee ☕"))),
-        h("p", {}, t("Factory Seat is a free, unofficial career mode for Le Mans Ultimate. It isn't affiliated with or endorsed by Studio 397 or Motorsport Games. It only reads the results files LMU writes; it never changes the game.")),
+        h("p", {}, t("Factory Seat is a free, unofficial career mode for Le Mans Ultimate. It isn't affiliated with or endorsed by Studio 397 or Motorsport Games. Results come only from LMU's XML files. Optional game integration configures and loads a weekend only when requested.")),
         h("p", {}, t("Headings use Barlow Condensed by The Barlow Project Authors, under the SIL Open Font License 1.1.")),
         h("p", {}, t("Track outlines are traced from OpenStreetMap. Map data © OpenStreetMap contributors, available under the Open Database License."))));
   }
